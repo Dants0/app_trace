@@ -26,7 +26,7 @@ O **App Trace Analyzer** é uma ferramenta de engenharia forense de alta perform
 
 1.  **Clone o repositório:**
     ```bash
-    git clone [https://github.com/seu-usuario/app-trace.git](https://github.com/seu-usuario/app-trace.git)
+    git clone [https://github.com/dants0/app-trace.git](https://github.com/dants0/app-trace.git)
     cd app-trace
     ```
 
