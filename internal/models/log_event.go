@@ -7,4 +7,6 @@ type LogEvent struct {
 	Count        int     `json:"count"`
 	TotalDeltaMS float64 `json:"total_delta_ms"`
 	AvgDeltaMS   float64 `json:"avg_delta_ms"`
+	Severity     string  `json:"severity"`
+	Details      string  `json:"details,omitempty"`
 }
