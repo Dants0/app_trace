@@ -90,6 +90,8 @@ func main() {
 		}
 
 		files := form.File["files"]
+		bugDescription := c.PostForm("bugDescription")
+
 		var wg sync.WaitGroup
 		resultsChan := make(chan gin.H, len(files))
 
@@ -107,7 +109,7 @@ func main() {
 
 				events := parser.ParseAndDeduplicate(scanner)
 
-				strategicPlan, err := ai.GetStrategicPlan(events, apiKey)
+				strategicPlan, err := ai.GetStrategicPlan(events, apiKey, bugDescription)
 				if err != nil {
 					strategicPlan = "Falha ao gerar análise: " + err.Error()
 				}
@@ -144,6 +146,7 @@ func main() {
 		files := form.File["files"]
 		var wg sync.WaitGroup
 		resultsChan := make(chan gin.H, len(files))
+		bugDescription := c.PostForm("bugDescription")
 
 		for _, fileHeader := range files {
 			wg.Add(1)
@@ -164,12 +167,11 @@ func main() {
 				events := parser.ParseAndDeduplicate(scanner)
 
 				// 2. Análise Estratégica via IA (Thread de Resolução)
-				strategicPlan, err := ai.GetStrategicPlan(events, apiKey)
+				strategicPlan, err := ai.GetStrategicPlan(events, apiKey, bugDescription)
 				if err != nil {
 					strategicPlan = "Erro na análise: " + err.Error()
 				}
 
-				
 				resultsChan <- gin.H{
 					"filename": header.Filename,
 					"summary": gin.H{

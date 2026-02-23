@@ -1,80 +1,74 @@
-package ai
+package ai 
 
 import (
-    "context"
-    "fmt"
-    "github.com/sashabaranov/go-openai"
-    "app_trace/internal/models"
+	"context"
+	"fmt"
+	"strings"
+
+	"app_trace/internal/models"
+	"github.com/sashabaranov/go-openai"
 )
 
-func GetStrategicPlan(events []models.LogEvent, apiKey string) (string, error) {
-    client := openai.NewClient(apiKey)
-    
-    // Filtramos apenas o que é relevante para economizar tokens e focar no erro
-    var filteredEvents []models.LogEvent
-    for _, e := range events {
-        if e.Severity != "INFO" || e.Count > 10 { 
-            filteredEvents = append(filteredEvents, e)
-        }
-    }
+// GetStrategicPlan agora recebe o bugDescription para dar contexto à IA
+func GetStrategicPlan(events []models.LogEvent, apiKey string, bugDescription string) (string, error) {
+	client := openai.NewClient(apiKey)
 
-    prompt := fmt.Sprintf(`
-        Atue como um Arquiteto de Software Especialista em PowerBuilder e Troubleshooting de Aplicações Legacy.
-				Contexto: Estou enviando um arquivo de trace gerado por uma aplicação PowerBuilder (via DB Trace/ODBC). O objetivo é identificar a Causa Raiz (Root Cause) de um bug ou gargalo que está impedindo o usuário de concluir uma operação.
-        Analise o rastro estruturado abaixo e retorne em no máximo 20 linhas a possível solução:
-        %v
+	// Nova lógica de filtragem: Blacklist de ruídos do PowerBuilder
+	var filteredEvents []models.LogEvent
+	for _, e := range events {
+		actionUpper := strings.ToUpper(e.Action)
 
-        Sua tarefa:
-Instruções de Análise Obrigatórias:
+		// Ignora metadados inúteis do PowerBuilder que poluem o contexto e gastam tokens
+		if strings.Contains(actionUpper, "GET EXTENDED ATTRIBUTES") ||
+			strings.Contains(actionUpper, "UNIQUE KEY CHECK") ||
+			strings.Contains(actionUpper, "DESCRIBE") ||
+			strings.Contains(actionUpper, "BLOB READ") ||
+			strings.Contains(actionUpper, "DBPARM=CONNECTSTRING") {
+			continue
+		}
 
-Reconstrução do Fluxo de Negócio (Reverse Engineering):
+		// Adiciona o evento, mantendo as queries reais de negócio e o que importa
+		filteredEvents = append(filteredEvents, e)
+	}
 
-Com base na sequência das queries e procedures, descreva em alto nível o que o usuário estava tentando fazer (ex: "Tentativa de login", "Processamento de Folha", "Abertura de Janela de Cadastro").
+	// Prompt aprimorado com injeção de contexto e diretrizes rígidas
+	prompt := fmt.Sprintf(`
+Você é um Arquiteto de Software Sênior especialista em PowerBuilder e SQL Tuning.
+Sua missão é fazer o troubleshooting de uma aplicação legada analisando um DB Trace.
 
-Identifique o ponto exato onde o fluxo foi interrompido (o "crash" ou o erro).
+Contexto do Erro relatado pelo usuário/QA: "%s"
 
-Detecção de Padrões de Erro PowerBuilder (Anti-Patterns):
+Abaixo está o log de trace filtrado da sessão onde o erro ocorreu:
+%%v
 
-Loops em Script (N+1): Identifique se há repetições excessivas de queries pequenas (indicando um SELECT ou INSERT dentro de um loop FOR no PowerScript, em vez de uma operação em lote ou DataWindow Update).
+Instruções rigorosas para sua análise:
+1. FOCO NO NEGÓCIO: Ignore queries de infraestrutura (login, controle de sessão). Vá direto para as transações próximas ao momento do erro relatado.
+2. ANÁLISE DE SQL (Missing Predicates): Procure ativamente por falhas na cláusula WHERE das consultas. O erro é causado por um SELECT que está trazendo dados a mais (falta de filtro de tipo/classe) ou um UPDATE sem restrição adequada?
+3. SINTOMAS POWERBUILDER: Verifique se há sinais de N+1 (loops no PowerScript fazendo queries individuais em vez de DataWindows) ou DataWindows puxando milhares de linhas sem paginação.
 
-Retrieves Gigantes: Aponte se há algum SELECT trazendo colunas desnecessárias ou milhares de linhas sem paginação (típico gargalo de DataWindow.Retrieve()).
+Estruture sua resposta EXATAMENTE neste formato (seja técnico, direto e não use mais que 4 parágrafos):
 
-Problemas de Concorrência: Verifique se há longos períodos entre um BEGIN TRANSACTION e o COMMIT, o que pode estar travando a aplicação (Locking).
+**Diagnóstico do Cenário:** Explique a lógica de banco de dados que a aplicação tentou executar relacionada ao erro.
+**Evidência do Erro:** Mostre a query específica do trace que está causando o problema e explique o que está faltando nela (ex: um filtro WHERE) ou o gargalo.
+**Solução Recomendada:** Dê o plano de ação técnico para o dev arrumar no PowerScript ou no banco de dados.
+`, bugDescription)
 
-Análise do Erro/Rollback:
+	// Injetando os eventos no prompt final
+	finalPrompt := fmt.Sprintf(prompt, filteredEvents)
 
-Se houver um ROLLBACK, identifique a última instrução executada com sucesso.
+	resp, err := client.CreateChatCompletion(
+		context.Background(),
+		openai.ChatCompletionRequest{
+			Model: openai.GPT4o,
+			Messages: []openai.ChatCompletionMessage{
+				{Role: openai.ChatMessageRoleSystem, Content: "Você é um expert em debugging de sistemas legados. Especificamente PowerBuilder. O seu objetivo é identificar a Causa Raiz (Root Cause) de um bug ou gargalo, a fim de facilitar a correção do Dev."},
+				{Role: openai.ChatMessageRoleUser, Content: finalPrompt},
+			},
+		},
+	)
 
-Analise se o erro foi de dados (ex: violação de constraint, tipo de dado incorreto gerado pelo PB) ou de timeout.
-
-Sugestões de Correção para o Desenvolvedor (Action Plan):
-
-No PowerScript: Sugira onde o código deve ser alterado (ex: "Mover a lógica de cálculo para uma Procedure", "Usar Datastore para validação", "Revisar o evento ItemChanged").
-
-No Banco: Se necessário, sugira índices, mas priorize a lógica da aplicação.
-
-Formato de Saída Esperado:
-
-Diagnóstico do Cenário: O que a aplicação estava fazendo.
-
-A Evidência do Erro: A linha ou bloco específico do trace que prova onde o bug possivelmente está.
-
-Solução Recomendada: Passos técnicos para o desenvolvedor PowerBuilder resolver o problema.
-    `, filteredEvents)
-
-    resp, err := client.CreateChatCompletion(
-        context.Background(),
-        openai.ChatCompletionRequest{
-            Model: openai.GPT4o,
-            Messages: []openai.ChatCompletionMessage{
-                {Role: openai.ChatMessageRoleSystem, Content: "Você é um expert em debugging de sistemas legados. Especificamente PowerBuilder. O seu objetivo é identificar a Causa Raiz (Root Cause) de um bug ou gargalo, a fim de facilitar a correção do Dev."},
-                {Role: openai.ChatMessageRoleUser, Content: prompt},
-            },
-        },
-    )
-
-    if err != nil {
-        return "", err
-    }
-    return resp.Choices[0].Message.Content, nil
+	if err != nil {
+		return "", err
+	}
+	return resp.Choices[0].Message.Content, nil
 }
