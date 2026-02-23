@@ -10,7 +10,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/gin-contrib/cors" 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -21,7 +21,13 @@ func main() {
 		log.Println("Aviso: .env não encontrado, usando variáveis de ambiente do sistema")
 	}
 
-	apiKey := os.Getenv("OPENAI_API_KEY")
+	provider := os.Getenv("AI_PROVIDER") // 'openai' ou 'gemini'
+	apiKey := ""
+	if provider == "gemini" {
+		apiKey = os.Getenv("GEMINI_API_KEY")
+	} else {
+		apiKey = os.Getenv("OPENAI_API_KEY")
+	}
 	port := os.Getenv("PORT")
 
 	r := gin.Default()
@@ -65,7 +71,7 @@ func main() {
 				events := parser.ParseAndDeduplicate(scanner)
 
 				// IA recebe o relato do bug + eventos estruturados
-				strategicPlan, err := ai.GetStrategicPlan(events, apiKey, bugDescription)
+				strategicPlan, err := ai.GetStrategicPlan(events, apiKey, bugDescription, provider)
 				if err != nil {
 					strategicPlan = "Erro na análise: " + err.Error()
 				}
@@ -152,7 +158,7 @@ func main() {
 
 				events := parser.ParseAndDeduplicate(scanner)
 
-				strategicPlan, err := ai.GetStrategicPlan(events, apiKey, bugDescription)
+				strategicPlan, err := ai.GetStrategicPlan(events, apiKey, bugDescription, provider)
 				if err != nil {
 					strategicPlan = "Falha ao gerar análise: " + err.Error()
 				}

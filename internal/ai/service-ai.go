@@ -1,4 +1,4 @@
-package ai 
+package ai
 
 import (
 	"context"
@@ -6,11 +6,49 @@ import (
 	"strings"
 
 	"app_trace/internal/models"
+	"github.com/google/generative-ai-go/genai"
 	"github.com/sashabaranov/go-openai"
+	"google.golang.org/api/option"
 )
 
 // GetStrategicPlan agora recebe o bugDescription para dar contexto à IA
-func GetStrategicPlan(events []models.LogEvent, apiKey string, bugDescription string) (string, error) {
+func GetStrategicPlan(events []models.LogEvent, apiKey string, bugDescription string, provider string) (string, error) {
+	if provider == "gemini" {
+		return callGemini(events, apiKey, bugDescription)
+	}
+	return callOpenAI(events, apiKey, bugDescription)
+}
+
+func callGemini(events []models.LogEvent, apiKey string, bugDesc string) (string, error) {
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+	if err != nil {
+		return "", err
+	}
+	defer client.Close()
+
+	model := client.GenerativeModel("gemini-1.5-pro") // Versão com maior janela de contexto para logs
+
+	prompt := fmt.Sprintf(`
+		Aja como Arquiteto de Software especialista em PowerBuilder e SQL Server.
+		CONTEXTO DO ERRO: %s
+		DADOS DO RASTRO: %v
+		TAREFA: Analise o rastro, identifique rc 100 em tabelas 'cfg' ou 'ini', falhas de schema e proponha correção técnica.
+	`, bugDesc, events)
+
+	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
+	if err != nil {
+		return "", err
+	}
+
+	// O Gemini retorna uma estrutura de Partes
+	if len(resp.Candidates) > 0 {
+		return fmt.Sprintf("%v", resp.Candidates[0].Content.Parts[0]), nil
+	}
+	return "Nenhuma análise gerada", nil
+}
+
+func callOpenAI(events []models.LogEvent, apiKey string, bugDesc string) (string, error) {
 	client := openai.NewClient(apiKey)
 
 	// Nova lógica de filtragem: Blacklist de ruídos do PowerBuilder
@@ -51,7 +89,7 @@ Estruture sua resposta EXATAMENTE neste formato (seja técnico, direto e não us
 **Diagnóstico do Cenário:** Explique a lógica de banco de dados que a aplicação tentou executar relacionada ao erro.
 **Evidência do Erro:** Mostre a query específica do trace que está causando o problema e explique o que está faltando nela (ex: um filtro WHERE) ou o gargalo.
 **Solução Recomendada:** Dê o plano de ação técnico para o dev arrumar no PowerScript ou no banco de dados.
-`, bugDescription)
+`, bugDesc)
 
 	// Injetando os eventos no prompt final
 	finalPrompt := fmt.Sprintf(prompt, filteredEvents)
