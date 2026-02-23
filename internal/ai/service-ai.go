@@ -11,7 +11,6 @@ import (
 	"google.golang.org/api/option"
 )
 
-// GetStrategicPlan agora recebe o bugDescription para dar contexto à IA
 func GetStrategicPlan(events []models.LogEvent, apiKey string, bugDescription string, provider string) (string, error) {
 	if provider == "gemini" {
 		return callGemini(events, apiKey, bugDescription)
@@ -27,7 +26,7 @@ func callGemini(events []models.LogEvent, apiKey string, bugDesc string) (string
 	}
 	defer client.Close()
 
-	model := client.GenerativeModel("gemini-1.5-pro") // Versão com maior janela de contexto para logs
+	model := client.GenerativeModel("gemini-1.5-pro")
 
 	prompt := fmt.Sprintf(`
 		Aja como Arquiteto de Software especialista em PowerBuilder e SQL Server.
@@ -41,7 +40,6 @@ func callGemini(events []models.LogEvent, apiKey string, bugDesc string) (string
 		return "", err
 	}
 
-	// O Gemini retorna uma estrutura de Partes
 	if len(resp.Candidates) > 0 {
 		return fmt.Sprintf("%v", resp.Candidates[0].Content.Parts[0]), nil
 	}
@@ -51,12 +49,10 @@ func callGemini(events []models.LogEvent, apiKey string, bugDesc string) (string
 func callOpenAI(events []models.LogEvent, apiKey string, bugDesc string) (string, error) {
 	client := openai.NewClient(apiKey)
 
-	// Nova lógica de filtragem: Blacklist de ruídos do PowerBuilder
 	var filteredEvents []models.LogEvent
 	for _, e := range events {
 		actionUpper := strings.ToUpper(e.Action)
 
-		// Ignora metadados inúteis do PowerBuilder que poluem o contexto e gastam tokens
 		if strings.Contains(actionUpper, "GET EXTENDED ATTRIBUTES") ||
 			strings.Contains(actionUpper, "UNIQUE KEY CHECK") ||
 			strings.Contains(actionUpper, "DESCRIBE") ||
@@ -65,11 +61,9 @@ func callOpenAI(events []models.LogEvent, apiKey string, bugDesc string) (string
 			continue
 		}
 
-		// Adiciona o evento, mantendo as queries reais de negócio e o que importa
 		filteredEvents = append(filteredEvents, e)
 	}
 
-	// Prompt aprimorado com injeção de contexto e diretrizes rígidas
 	prompt := fmt.Sprintf(`
 Você é um Arquiteto de Software Sênior especialista em PowerBuilder e SQL Tuning.
 Sua missão é fazer o troubleshooting de uma aplicação legada analisando um DB Trace.
@@ -91,7 +85,6 @@ Estruture sua resposta EXATAMENTE neste formato (seja técnico, direto e não us
 **Solução Recomendada:** Dê o plano de ação técnico para o dev arrumar no PowerScript ou no banco de dados.
 `, bugDesc)
 
-	// Injetando os eventos no prompt final
 	finalPrompt := fmt.Sprintf(prompt, filteredEvents)
 
 	resp, err := client.CreateChatCompletion(
