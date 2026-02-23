@@ -26,7 +26,7 @@ func callGemini(events []models.LogEvent, apiKey string, bugDesc string) (string
 	}
 	defer client.Close()
 
-	model := client.GenerativeModel("gemini-1.5-pro")
+	model := client.GenerativeModel("gemini-2.5-flash")
 
 	prompt := fmt.Sprintf(`
 		Aja como Arquiteto de Software especialista em PowerBuilder e SQL Server.
