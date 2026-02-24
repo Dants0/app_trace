@@ -21,13 +21,6 @@ func main() {
 		log.Println("Aviso: .env não encontrado, usando variáveis de ambiente do sistema")
 	}
 
-	provider := os.Getenv("AI_PROVIDER") // 'openai' ou 'gemini'
-	apiKey := ""
-	if provider == "gemini" {
-		apiKey = os.Getenv("GEMINI_API_KEY")
-	} else {
-		apiKey = os.Getenv("OPENAI_API_KEY")
-	}
 	port := os.Getenv("PORT")
 
 	r := gin.Default()
@@ -43,6 +36,7 @@ func main() {
 
 	r.POST("/analyze-trace", func(c *gin.Context) {
 		bugDescription := c.PostForm("bugDescription")
+		modelAi := c.PostForm("modelAi")
 		form, err := c.MultipartForm()
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Falha ao ler arquivos"})
@@ -71,7 +65,7 @@ func main() {
 				events := parser.ParseAndDeduplicate(scanner)
 
 				// IA recebe o relato do bug + eventos estruturados
-				strategicPlan, err := ai.GetStrategicPlan(events, apiKey, bugDescription, provider)
+				strategicPlan, err := ai.GetStrategicPlan(events, bugDescription, modelAi)
 				if err != nil {
 					strategicPlan = "Erro na análise: " + err.Error()
 				}
@@ -140,6 +134,7 @@ func main() {
 
 		files := form.File["files"]
 		bugDescription := c.PostForm("bugDescription")
+		modelAi := c.PostForm("modelAi")
 
 		var wg sync.WaitGroup
 		resultsChan := make(chan gin.H, len(files))
@@ -158,7 +153,7 @@ func main() {
 
 				events := parser.ParseAndDeduplicate(scanner)
 
-				strategicPlan, err := ai.GetStrategicPlan(events, apiKey, bugDescription, provider)
+				strategicPlan, err := ai.GetStrategicPlan(events, bugDescription, modelAi)
 				if err != nil {
 					strategicPlan = "Falha ao gerar análise: " + err.Error()
 				}

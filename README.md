@@ -32,6 +32,7 @@ O **App Trace Analyzer** é uma ferramenta de engenharia forense de alta perform
 
 2.  **Instale as dependências:**
     ```bash
+    go get
     go mod tidy
     ```
 
@@ -41,6 +42,8 @@ O **App Trace Analyzer** é uma ferramenta de engenharia forense de alta perform
     ```env
     PORT=:8000
     OPENAI_API_KEY=sk-sua-chave-api-aqui
+    GEMINI_API_KEY=sua_chave_gemini
+    AI_PROVIDER=gemini # ou 'openai'
     ```
 
 4.  **Execute a aplicação:**

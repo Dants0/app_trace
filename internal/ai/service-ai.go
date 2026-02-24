@@ -3,30 +3,35 @@ package ai
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"app_trace/internal/models"
+
 	"github.com/google/generative-ai-go/genai"
 	"github.com/sashabaranov/go-openai"
 	"google.golang.org/api/option"
 )
 
-func GetStrategicPlan(events []models.LogEvent, apiKey string, bugDescription string, provider string) (string, error) {
-	if provider == "gemini" {
-		return callGemini(events, apiKey, bugDescription)
+func GetStrategicPlan(events []models.LogEvent, bugDescription string, modelAi string) (string, error) {
+	if strings.Contains(modelAi, "gemini") {
+		return callGemini(events, bugDescription, modelAi)
 	}
-	return callOpenAI(events, apiKey, bugDescription)
+	return callOpenAI(events, bugDescription, modelAi)
 }
 
-func callGemini(events []models.LogEvent, apiKey string, bugDesc string) (string, error) {
+func callGemini(events []models.LogEvent, bugDesc string, modelAi string) (string, error) {
 	ctx := context.Background()
+	apiKey := ""
+	apiKey = os.Getenv("GEMINI_API_KEY")
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+
 	if err != nil {
 		return "", err
 	}
 	defer client.Close()
 
-	model := client.GenerativeModel("gemini-2.5-flash")
+	model := client.GenerativeModel(modelAi)
 
 	prompt := fmt.Sprintf(`
 		Aja como Arquiteto de Software especialista em PowerBuilder e SQL Server.
@@ -46,7 +51,9 @@ func callGemini(events []models.LogEvent, apiKey string, bugDesc string) (string
 	return "Nenhuma análise gerada", nil
 }
 
-func callOpenAI(events []models.LogEvent, apiKey string, bugDesc string) (string, error) {
+func callOpenAI(events []models.LogEvent, bugDesc string, modelAi string) (string, error) {
+	apiKey := ""
+	apiKey = os.Getenv("OPENAI_API_KEY")
 	client := openai.NewClient(apiKey)
 
 	var filteredEvents []models.LogEvent
@@ -54,6 +61,7 @@ func callOpenAI(events []models.LogEvent, apiKey string, bugDesc string) (string
 		actionUpper := strings.ToUpper(e.Action)
 
 		if strings.Contains(actionUpper, "GET EXTENDED ATTRIBUTES") ||
+		 	strings.Contains(actionUpper, "LOGIN") ||
 			strings.Contains(actionUpper, "UNIQUE KEY CHECK") ||
 			strings.Contains(actionUpper, "DESCRIBE") ||
 			strings.Contains(actionUpper, "BLOB READ") ||
@@ -90,7 +98,7 @@ Estruture sua resposta EXATAMENTE neste formato (seja técnico, direto e não us
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model: openai.GPT4o,
+			Model: modelAi,
 			Messages: []openai.ChatCompletionMessage{
 				{Role: openai.ChatMessageRoleSystem, Content: "Você é um expert em debugging de sistemas legados. Especificamente PowerBuilder. O seu objetivo é identificar a Causa Raiz (Root Cause) de um bug ou gargalo, a fim de facilitar a correção do Dev."},
 				{Role: openai.ChatMessageRoleUser, Content: finalPrompt},
