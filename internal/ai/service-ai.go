@@ -17,6 +17,10 @@ func GetStrategicPlan(events []models.LogEvent, bugDescription string, modelAi s
 	if strings.Contains(modelAi, "gemini") {
 		return callGemini(events, bugDescription, modelAi)
 	}
+	if strings.Contains(modelAi, "copilot") {
+		// Implementação para Copilot quando disponível
+		return "Copilot integration not implemented yet", nil
+	}
 	return callOpenAI(events, bugDescription, modelAi)
 }
 
@@ -34,10 +38,20 @@ func callGemini(events []models.LogEvent, bugDesc string, modelAi string) (strin
 	model := client.GenerativeModel(modelAi)
 
 	prompt := fmt.Sprintf(`
-		Aja como Arquiteto de Software especialista em PowerBuilder e SQL Server.
+		Você é um Arquiteto de Software Sênior especialista em PowerBuilder e SQL Tuning.
+		Sua missão é fazer o troubleshooting de uma aplicação legada analisando um DB Trace.
 		CONTEXTO DO ERRO: %s
 		DADOS DO RASTRO: %v
-		TAREFA: Analise o rastro, identifique rc 100 em tabelas 'cfg' ou 'ini', falhas de schema e proponha correção técnica.
+		Instruções rigorosas para sua análise:
+			1. FOCO NO NEGÓCIO: Ignore queries de infraestrutura (login, controle de sessão). Vá direto para as transações próximas ao momento do erro relatado.
+			2. ANÁLISE DE SQL (Missing Predicates): Procure ativamente por falhas na cláusula WHERE das consultas. O erro é causado por um SELECT que está trazendo dados a mais (falta de filtro de tipo/classe) ou um UPDATE sem restrição adequada?
+			3. SINTOMAS POWERBUILDER: Verifique se há sinais de N+1 (loops no PowerScript fazendo queries individuais em vez de DataWindows) ou DataWindows puxando milhares de linhas sem paginação.
+
+			Estruture sua resposta EXATAMENTE neste formato (seja técnico, direto e não use mais que 4 parágrafos):
+
+			**Diagnóstico do Cenário:** Explique a lógica de banco de dados que a aplicação tentou executar relacionada ao erro.
+			**Evidência do Erro:** Mostre a query específica do trace que está causando o problema e explique o que está faltando nela (ex: um filtro WHERE) ou o gargalo.
+			**Solução Recomendada:** Dê o plano de ação técnico para o dev arrumar no PowerScript ou no banco de dados.
 	`, bugDesc, events)
 
 	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
@@ -61,7 +75,7 @@ func callOpenAI(events []models.LogEvent, bugDesc string, modelAi string) (strin
 		actionUpper := strings.ToUpper(e.Action)
 
 		if strings.Contains(actionUpper, "GET EXTENDED ATTRIBUTES") ||
-		 	strings.Contains(actionUpper, "LOGIN") ||
+			strings.Contains(actionUpper, "LOGIN") ||
 			strings.Contains(actionUpper, "UNIQUE KEY CHECK") ||
 			strings.Contains(actionUpper, "DESCRIBE") ||
 			strings.Contains(actionUpper, "BLOB READ") ||

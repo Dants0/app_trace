@@ -88,7 +88,7 @@ func setSeverity(e *models.LogEvent) {
 		e.Details = "Falha crítica na execução ou transação abortada."
 	}
 
-	if e.AvgDeltaMS > 200 {
+	if e.AvgDeltaMS > 500 {
 		e.Severity = "HIGH_LATENCY"
 		e.Details = "Gargalo de performance detectado."
 	}
