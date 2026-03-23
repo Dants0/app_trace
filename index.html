@@ -56,6 +56,7 @@
         <label class="text-[10px] font-bold text-slate-500 uppercase px-2">Engine:</label>
         <select id="modelAi"
           class="bg-slate-900 text-blue-400 text-xs font-bold p-1 rounded outline-none border-none cursor-pointer">
+          <option value="copilot-3.5-turbo">Copilot</option>
           <option value="gpt-4.1-mini">OpenAI GPT-4.1 Mini</option>
           <option value="gpt-4.1-nano">OpenAI GPT-4.1 Nano</option>
           <option value="gpt-5-nano">OpenAI GPT-5 Nano</option>
@@ -107,7 +108,7 @@
         <div id="loading"
           class="hidden flex flex-col items-center justify-center h-64 bg-white rounded-2xl border border-dashed border-slate-200">
           <div class="loader ease-linear rounded-full border-4 border-t-4 border-slate-100 h-12 w-12 mb-4"></div>
-          <p class="text-slate-600 font-medium">Processando rastro e consultando IA...</p>
+          <p class="text-slate-600 font-medium">Processando trace e consultando Copilot...</p>
         </div>
 
         <div id="results" class="space-y-6">
@@ -128,7 +129,7 @@
       breaks: true,
       gfm: true
     });
-    
+
     const sessionData = {};
 
     // Listener para mostrar nomes dos arquivos selecionados
@@ -189,9 +190,36 @@
 
       reports.forEach((report, index) => {
         const fileKey = `report_${index}`;
-        // Normaliza a origem dos dados conforme a rota
         const events = report.structured_data || report.data;
         sessionData[fileKey] = events;
+
+        const sortedEvents = [...events].sort((a, b) => b.avg_delta_ms - a.avg_delta_ms);
+
+        const displayEvents = sortedEvents.slice(0, 100);
+
+        let tableRows = '';
+        displayEvents.forEach((ev, i) => {
+          let severityClass = 'bg-slate-100 text-slate-600';
+          if (ev.severity === 'CRITICAL') severityClass = 'bg-red-100 text-red-700';
+          else if (ev.severity === 'HIGH_LATENCY') severityClass = 'bg-orange-100 text-orange-700';
+          else if (ev.severity === 'WARNING') severityClass = 'bg-yellow-100 text-yellow-700';
+
+          tableRows += `
+            <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+                <td class="px-4 py-3 font-medium text-slate-400 text-xs">${i + 1}</td>
+                <td class="px-4 py-3 font-mono text-xs max-w-lg truncate" title="${(ev.statement || ev.action).replace(/"/g, '&quot;')}">
+                    <span class="font-bold text-slate-700 block truncate">${ev.action}</span>
+                    ${ev.statement ? `<span class="text-slate-500 block truncate mt-1">${ev.statement}</span>` : ''}
+                </td>
+                <td class="px-4 py-3 font-medium text-xs text-center">${ev.count}</td>
+                <td class="px-4 py-3 text-xs text-right font-medium text-slate-600">${ev.total_delta_ms.toFixed(2)}</td>
+                <td class="px-4 py-3 text-xs text-right text-slate-500">${ev.avg_delta_ms.toFixed(2)}</td>
+                <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase ${severityClass}">${ev.severity}</span>
+                </td>
+            </tr>
+          `;
+        });
 
         const card = document.createElement('div');
         card.className = "bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-fade-in";
@@ -214,16 +242,35 @@
                                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"/></svg>
                                 Diagnóstico da IA e Plano de Resolução
                             </div>
-                            <div class="bg-blue-50 border border-blue-100 rounded-xl p-5 text-slate-700 text-sm whitespace-pre-line leading-relaxed italic">
+                            <div class="bg-blue-50 border border-blue-100 rounded-xl p-5 text-slate-700 text-sm whitespace-pre-line leading-relaxed italic mb-6">
                                 <div class="prose prose-sm prose-slate max-w-none">
-        ${marked.parse(report.strategic_analysis || report.strategic_plan || "")}
-    </div>
+                                    ${marked.parse(report.strategic_analysis || report.strategic_plan || "")}
+                                </div>
                             </div>
-                        ` : `
-                            <div class="bg-slate-50 border border-slate-100 rounded-xl p-5 text-center text-slate-500 text-sm">
-                                Processamento básico concluído. Clique em "Baixar JSON" para ver os dados estruturados.
-                            </div>
-                        `}
+                        ` : ''}
+                        
+                        <div class="flex items-center gap-2 mb-3 text-slate-700 font-bold text-sm uppercase">
+                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            Top 100 Operações (Ordenadas por Média de Tempo Total)
+                        </div>
+                        <div class="overflow-x-auto border border-slate-200 rounded-xl max-h-96 overflow-y-auto">
+                            <table class="w-full text-left text-sm text-slate-600">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-xs uppercase font-bold text-slate-500 sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th class="px-4 py-3">#</th>
+                                        <th class="px-4 py-3">Ação / Statement</th>
+                                        <th class="px-4 py-3 text-center">Execuções</th>
+                                        <th class="px-4 py-3 text-right">Tempo Total (ms)</th>
+                                        <th class="px-4 py-3 text-right">Média (ms)</th>
+                                        <th class="px-4 py-3 text-center">Severidade</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tableRows}
+                                </tbody>
+                            </table>
+                        </div>
+                        ${events.length > 100 ? `<p class="text-[10px] text-slate-400 mt-2 text-right">* Exibindo apenas os 100 registros mais custosos. Baixe o JSON para ver os ${events.length} eventos completos.</p>` : ''}
                     </div>
                 `;
         resultsDiv.appendChild(card);
