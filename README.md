@@ -1,6 +1,6 @@
-# App Trace Analyzer
+# Trace Intelligence
 
-O **App Trace Analyzer** é uma ferramenta de engenharia forense de alta performance desenvolvida em Go. Ela foi projetada para processar logs de rastro de aplicações (especificamente traces de banco de dados e PowerBuilder), identificar gargalos de performance e utilizar Inteligência Artificial para diagnosticar a causa raiz de falhas, lentidão e erros de lógica de negócio.
+O **Trace Intelligence** é uma ferramenta de engenharia forense de alta performance desenvolvida em Go. Ela foi projetada para processar logs de rastro de aplicações (especificamente traces de banco de dados e PowerBuilder), identificar gargalos de performance e utilizar Inteligência Artificial para diagnosticar a causa raiz de falhas, lentidão e erros de lógica de negócio.
 
 ## 🚀 Funcionalidades
 
