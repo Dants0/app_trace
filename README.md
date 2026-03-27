@@ -128,5 +128,3 @@ O processador (`internal/parser`) executa as seguintes etapas:
     * *Processado:* `SELECT * FROM t WHERE id = ?`
     * Isso permite agrupar milhares de execuções diferentes em uma única métrica estatística.
 4.  **Hashing:** Gera um ID único (MD5) para cada padrão de query para deduplicação rápida.
-
-## 📂 Estrutura do Projeto
