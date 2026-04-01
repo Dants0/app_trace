@@ -62,19 +62,24 @@ func main() {
 				buf := make([]byte, 0, 5*1024*1024)
 				scanner.Buffer(buf, 5*1024*1024)
 
-				events := parser.ParseAndDeduplicate(scanner)
+				eventsGroups := parser.ParseAndDeduplicate(scanner)
+
+				totalEvents := 0
+				for _, group := range eventsGroups {
+					totalEvents += len(group.Events)
+				}
 
 				// IA recebe o relato do bug + eventos estruturados
-				strategicPlan, err := ai.GetStrategicPlan(events, bugDescription, modelAi)
+				strategicPlan, err := ai.GetStrategicPlan(eventsGroups, bugDescription, modelAi)
 				if err != nil {
 					strategicPlan = "Erro na análise: " + err.Error()
 				}
 
 				resultsChan <- gin.H{
 					"filename":           header.Filename,
-					"event_count":        len(events),
+					"event_count":        totalEvents,
 					"strategic_analysis": strategicPlan,
-					"structured_data":    events,
+					"structured_data":    eventsGroups,
 				}
 			}(fileHeader)
 		}
@@ -104,11 +109,17 @@ func main() {
 				f, _ := header.Open()
 				defer f.Close()
 				scanner := bufio.NewScanner(f)
-				events := parser.ParseAndDeduplicate(scanner)
+				eventsGroups := parser.ParseAndDeduplicate(scanner)
+
+				totalEvents := 0
+				for _, group := range eventsGroups {
+					totalEvents += len(group.Events)
+				}
+
 				resultsChan <- gin.H{
 					"filename":    header.Filename,
-					"event_count": len(events),
-					"data":        events,
+					"event_count": totalEvents,
+					"data":        eventsGroups,
 				}
 			}(fileHeader)
 		}
