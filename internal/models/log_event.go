@@ -1,5 +1,10 @@
 package models
 
+type TraceGroup struct {
+	Timestamp string     `json:"timestamp"`
+	Events    []LogEvent `json:"events"`
+}
+
 type LogEvent struct {
 	Session      string  `json:"session"`
 	Action       string  `json:"action"`
@@ -9,4 +14,5 @@ type LogEvent struct {
 	AvgDeltaMS   float64 `json:"avg_delta_ms"`
 	Severity     string  `json:"severity"`
 	Details      string  `json:"details,omitempty"`
+	RowsAffected int     `json:"rows_affected,omitempty"`
 }

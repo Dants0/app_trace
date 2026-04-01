@@ -19,46 +19,53 @@ import (
 )
 
 // GetStrategicPlan atua como um Router (Factory) para direcionar a chamada para a IA correta
-func GetStrategicPlan(events []models.LogEvent, bugDescription string, modelAi string) (string, error) {
+func GetStrategicPlan(groups []models.TraceGroup, bugDescription string, modelAi string) (string, error) {
 	if strings.Contains(modelAi, "gemini") {
-		return callGemini(events, bugDescription, modelAi)
+		return callGemini(groups, bugDescription, modelAi)
 	}
 	if strings.Contains(modelAi, "claude") {
-		return callAnthropic(events, bugDescription, modelAi)
+		return callAnthropic(groups, bugDescription, modelAi)
 	}
 	if strings.Contains(modelAi, "llama") {
-		return callLlamaViaGroq(events, bugDescription, modelAi)
+		return callLlamaViaGroq(groups, bugDescription, modelAi)
 	}
 	if strings.Contains(modelAi, "copilot") {
-		// Implementação para Copilot quando disponível
-		return "Copilot integration not implemented yet", nil
+		return callCopilot(groups, bugDescription, modelAi)
 	}
-	// Fallback padrão para OpenAI (GPTs)
-	return callOpenAI(events, bugDescription, modelAi)
+	return callOpenAI(groups, bugDescription, modelAi)
 }
 
 // -----------------------------------------------------------------------------
 // FUNÇÕES AUXILIARES
 // -----------------------------------------------------------------------------
 
-func filterEvents(events []models.LogEvent) []models.LogEvent {
-	var filtered []models.LogEvent
-	for _, e := range events {
-		actionUpper := strings.ToUpper(e.Action)
-		if strings.Contains(actionUpper, "GET EXTENDED ATTRIBUTES") ||
-			strings.Contains(actionUpper, "LOGIN") ||
-			strings.Contains(actionUpper, "UNIQUE KEY CHECK") ||
-			strings.Contains(actionUpper, "DESCRIBE") ||
-			strings.Contains(actionUpper, "BLOB READ") ||
-			strings.Contains(actionUpper, "DBPARM=CONNECTSTRING") {
-			continue
+func filterEvents(groups []models.TraceGroup) []models.TraceGroup {
+	var filteredGroups []models.TraceGroup
+	for _, g := range groups {
+		var filtered []models.LogEvent
+		for _, e := range g.Events {
+			actionUpper := strings.ToUpper(e.Action)
+			if strings.Contains(actionUpper, "GET EXTENDED ATTRIBUTES") ||
+				strings.Contains(actionUpper, "LOGIN") ||
+				strings.Contains(actionUpper, "UNIQUE KEY CHECK") ||
+				strings.Contains(actionUpper, "DESCRIBE") ||
+				strings.Contains(actionUpper, "BLOB READ") ||
+				strings.Contains(actionUpper, "DBPARM=CONNECTSTRING") {
+				continue
+			}
+			filtered = append(filtered, e)
 		}
-		filtered = append(filtered, e)
+		if len(filtered) > 0 {
+			filteredGroups = append(filteredGroups, models.TraceGroup{
+				Timestamp: g.Timestamp,
+				Events:    filtered,
+			})
+		}
 	}
-	return filtered
+	return filteredGroups
 }
 
-func buildPrompt(filteredEvents []models.LogEvent, bugDesc string) string {
+func buildPrompt(filteredEvents []models.TraceGroup, bugDesc string) string {
 	return fmt.Sprintf(`
 Você é um Arquiteto de Software Sênior especialista em PowerBuilder e SQL Tuning.
 Sua missão é fazer o troubleshooting de uma aplicação legada analisando um DB Trace.
@@ -81,7 +88,7 @@ Estruture sua resposta EXATAMENTE neste formato (seja técnico, direto e não us
 `, bugDesc, filteredEvents)
 }
 
-func callGemini(events []models.LogEvent, bugDesc string, modelAi string) (string, error) {
+func callGemini(groups []models.TraceGroup, bugDesc string, modelAi string) (string, error) {
 	ctx := context.Background()
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	client, err := genai.NewClient(ctx, googleOption.WithAPIKey(apiKey))
@@ -92,7 +99,7 @@ func callGemini(events []models.LogEvent, bugDesc string, modelAi string) (strin
 
 	model := client.GenerativeModel(modelAi)
 
-	prompt := buildPrompt(filterEvents(events), bugDesc)
+	prompt := buildPrompt(filterEvents(groups), bugDesc)
 
 	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
 	if err != nil {
@@ -105,11 +112,11 @@ func callGemini(events []models.LogEvent, bugDesc string, modelAi string) (strin
 	return "Nenhuma análise gerada", nil
 }
 
-func callOpenAI(events []models.LogEvent, bugDesc string, modelAi string) (string, error) {
+func callOpenAI(groups []models.TraceGroup, bugDesc string, modelAi string) (string, error) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	client := openai.NewClient(apiKey)
 
-	filteredEvents := filterEvents(events)
+	filteredEvents := filterEvents(groups)
 	prompt := buildPrompt(filteredEvents, bugDesc)
 
 	resp, err := client.CreateChatCompletion(
@@ -129,13 +136,13 @@ func callOpenAI(events []models.LogEvent, bugDesc string, modelAi string) (strin
 	return resp.Choices[0].Message.Content, nil
 }
 
-func callAnthropic(events []models.LogEvent, bugDesc string, modelAi string) (string, error) {
+func callAnthropic(groups []models.TraceGroup, bugDesc string, modelAi string) (string, error) {
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 	if apiKey == "" {
 		return "", fmt.Errorf("ANTHROPIC_API_KEY não configurada")
 	}
 
-	filteredEvents := filterEvents(events)
+	filteredEvents := filterEvents(groups)
 	prompt := buildPrompt(filteredEvents, bugDesc)
 
 	// Estruturas locais limpas para montar o JSON da requisição
@@ -207,14 +214,14 @@ func callAnthropic(events []models.LogEvent, bugDesc string, modelAi string) (st
 	return "Nenhuma análise gerada", nil
 }
 
-func callLlamaViaGroq(events []models.LogEvent, bugDesc string, modelAi string) (string, error) {
+func callLlamaViaGroq(groups []models.TraceGroup, bugDesc string, modelAi string) (string, error) {
 	apiKey := os.Getenv("GROQ_API_KEY")
 
 	config := openai.DefaultConfig(apiKey)
 	config.BaseURL = "https://api.groq.com/openai/v1"
 	client := openai.NewClientWithConfig(config)
 
-	filteredEvents := filterEvents(events)
+	filteredEvents := filterEvents(groups)
 	prompt := buildPrompt(filteredEvents, bugDesc)
 
 	resp, err := client.CreateChatCompletion(
@@ -234,9 +241,9 @@ func callLlamaViaGroq(events []models.LogEvent, bugDesc string, modelAi string) 
 	return resp.Choices[0].Message.Content, nil
 }
 
-func callCopilot(events []models.LogEvent, bugDesc string, modelAi string) (string, error) {
+func callCopilot(groups []models.TraceGroup, bugDesc string, modelAi string) (string, error) {
 	apiKey := os.Getenv("AZURE_OPENAI_API_KEY")
-	endpoint := os.Getenv("AZURE_OPENAI_ENDPOINT") 
+	endpoint := os.Getenv("AZURE_OPENAI_ENDPOINT")
 
 	if apiKey == "" || endpoint == "" {
 		return "", fmt.Errorf("credenciais do Azure OpenAI (Copilot) não configuradas no .env")
@@ -245,13 +252,13 @@ func callCopilot(events []models.LogEvent, bugDesc string, modelAi string) (stri
 	config := openai.DefaultAzureConfig(apiKey, endpoint)
 	client := openai.NewClientWithConfig(config)
 
-	filteredEvents := filterEvents(events)
+	filteredEvents := filterEvents(groups)
 	prompt := buildPrompt(filteredEvents, bugDesc)
 
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model: modelAi, 
+			Model: modelAi,
 			Messages: []openai.ChatCompletionMessage{
 				{Role: openai.ChatMessageRoleSystem, Content: "Você é um expert em debugging de sistemas legados PowerBuilder."},
 				{Role: openai.ChatMessageRoleUser, Content: prompt},
