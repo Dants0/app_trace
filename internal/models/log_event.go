@@ -16,3 +16,12 @@ type LogEvent struct {
 	Details      string  `json:"details,omitempty"`
 	RowsAffected int     `json:"rows_affected,omitempty"`
 }
+
+type APIKeys struct {
+	Gemini    string
+	OpenAI    string
+	Anthropic string
+	Groq      string
+	AzureEP   string
+	Azure     string
+}

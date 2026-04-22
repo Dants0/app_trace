@@ -2,6 +2,7 @@ package main
 
 import (
 	"app_trace/internal/ai"
+	"app_trace/internal/models"
 	"app_trace/internal/parser"
 	"bufio"
 	"log"
@@ -37,6 +38,17 @@ func main() {
 	r.POST("/analyze-trace", func(c *gin.Context) {
 		bugDescription := c.PostForm("bugDescription")
 		modelAi := c.PostForm("modelAi")
+
+		// Lê as chaves do payload enviado pelo Javascript
+		apiKeys := models.APIKeys{
+			Gemini:    c.PostForm("key_gemini"),
+			OpenAI:    c.PostForm("key_openai"),
+			Anthropic: c.PostForm("key_anthropic"),
+			Groq:      c.PostForm("key_groq"),
+			AzureEP:   c.PostForm("key_azure_ep"),
+			Azure:     c.PostForm("key_azure"),
+		}
+
 		form, err := c.MultipartForm()
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Falha ao ler arquivos"})
@@ -69,8 +81,8 @@ func main() {
 					totalEvents += len(group.Events)
 				}
 
-				// IA recebe o relato do bug + eventos estruturados
-				strategicPlan, err := ai.GetStrategicPlan(eventsGroups, bugDescription, modelAi)
+				// Envia os eventos e as chaves da API para o serviço
+				strategicPlan, err := ai.GetStrategicPlan(eventsGroups, bugDescription, modelAi, apiKeys)
 				if err != nil {
 					strategicPlan = "Erro na análise: " + err.Error()
 				}
@@ -147,6 +159,16 @@ func main() {
 		bugDescription := c.PostForm("bugDescription")
 		modelAi := c.PostForm("modelAi")
 
+		// Lê as chaves do payload enviado pelo Javascript
+		apiKeys := models.APIKeys{
+			Gemini:    c.PostForm("key_gemini"),
+			OpenAI:    c.PostForm("key_openai"),
+			Anthropic: c.PostForm("key_anthropic"),
+			Groq:      c.PostForm("key_groq"),
+			AzureEP:   c.PostForm("key_azure_ep"),
+			Azure:     c.PostForm("key_azure"),
+		}
+
 		var wg sync.WaitGroup
 		resultsChan := make(chan gin.H, len(files))
 
@@ -164,7 +186,8 @@ func main() {
 
 				events := parser.ParseAndDeduplicate(scanner)
 
-				strategicPlan, err := ai.GetStrategicPlan(events, bugDescription, modelAi)
+				// Passa o struct de chaves para o backend gerar a análise
+				strategicPlan, err := ai.GetStrategicPlan(events, bugDescription, modelAi, apiKeys)
 				if err != nil {
 					strategicPlan = "Falha ao gerar análise: " + err.Error()
 				}
