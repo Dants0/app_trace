@@ -13,26 +13,26 @@ import (
 	"app_trace/internal/models"
 
 	"github.com/google/generative-ai-go/genai"
-	googleOption "google.golang.org/api/option" // Alias para a lib do Google
+	googleOption "google.golang.org/api/option"
 
 	"github.com/sashabaranov/go-openai"
 )
 
 // GetStrategicPlan atua como um Router (Factory) para direcionar a chamada para a IA correta
-func GetStrategicPlan(groups []models.TraceGroup, bugDescription string, modelAi string) (string, error) {
+func GetStrategicPlan(groups []models.TraceGroup, bugDescription string, modelAi string, keys models.APIKeys) (string, error) {
 	if strings.Contains(modelAi, "gemini") {
-		return callGemini(groups, bugDescription, modelAi)
+		return callGemini(groups, bugDescription, modelAi, keys)
 	}
 	if strings.Contains(modelAi, "claude") {
-		return callAnthropic(groups, bugDescription, modelAi)
+		return callAnthropic(groups, bugDescription, modelAi, keys)
 	}
 	if strings.Contains(modelAi, "llama") {
-		return callLlamaViaGroq(groups, bugDescription, modelAi)
+		return callLlamaViaGroq(groups, bugDescription, modelAi, keys)
 	}
 	if strings.Contains(modelAi, "copilot") {
-		return callCopilot(groups, bugDescription, modelAi)
+		return callCopilot(groups, bugDescription, modelAi, keys)
 	}
-	return callOpenAI(groups, bugDescription, modelAi)
+	return callOpenAI(groups, bugDescription, modelAi, keys)
 }
 
 // -----------------------------------------------------------------------------
@@ -88,9 +88,16 @@ Estruture sua resposta EXATAMENTE neste formato (seja técnico, direto e não us
 `, bugDesc, filteredEvents)
 }
 
-func callGemini(groups []models.TraceGroup, bugDesc string, modelAi string) (string, error) {
+func callGemini(groups []models.TraceGroup, bugDesc string, modelAi string, keys models.APIKeys) (string, error) {
+	apiKey := keys.Gemini
+	if apiKey == "" {
+		apiKey = os.Getenv("GEMINI_API_KEY") // Fallback
+	}
+	if apiKey == "" {
+		return "", fmt.Errorf("API Key do Gemini não informada")
+	}
+
 	ctx := context.Background()
-	apiKey := os.Getenv("GEMINI_API_KEY")
 	client, err := genai.NewClient(ctx, googleOption.WithAPIKey(apiKey))
 	if err != nil {
 		return "", err
@@ -98,7 +105,6 @@ func callGemini(groups []models.TraceGroup, bugDesc string, modelAi string) (str
 	defer client.Close()
 
 	model := client.GenerativeModel(modelAi)
-
 	prompt := buildPrompt(filterEvents(groups), bugDesc)
 
 	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
@@ -112,10 +118,16 @@ func callGemini(groups []models.TraceGroup, bugDesc string, modelAi string) (str
 	return "Nenhuma análise gerada", nil
 }
 
-func callOpenAI(groups []models.TraceGroup, bugDesc string, modelAi string) (string, error) {
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	client := openai.NewClient(apiKey)
+func callOpenAI(groups []models.TraceGroup, bugDesc string, modelAi string, keys models.APIKeys) (string, error) {
+	apiKey := keys.OpenAI
+	if apiKey == "" {
+		apiKey = os.Getenv("OPENAI_API_KEY") // Fallback
+	}
+	if apiKey == "" {
+		return "", fmt.Errorf("API Key da OpenAI não informada")
+	}
 
+	client := openai.NewClient(apiKey)
 	filteredEvents := filterEvents(groups)
 	prompt := buildPrompt(filteredEvents, bugDesc)
 
@@ -136,16 +148,18 @@ func callOpenAI(groups []models.TraceGroup, bugDesc string, modelAi string) (str
 	return resp.Choices[0].Message.Content, nil
 }
 
-func callAnthropic(groups []models.TraceGroup, bugDesc string, modelAi string) (string, error) {
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+func callAnthropic(groups []models.TraceGroup, bugDesc string, modelAi string, keys models.APIKeys) (string, error) {
+	apiKey := keys.Anthropic
 	if apiKey == "" {
-		return "", fmt.Errorf("ANTHROPIC_API_KEY não configurada")
+		apiKey = os.Getenv("ANTHROPIC_API_KEY") // Fallback
+	}
+	if apiKey == "" {
+		return "", fmt.Errorf("API Key da Anthropic não informada")
 	}
 
 	filteredEvents := filterEvents(groups)
 	prompt := buildPrompt(filteredEvents, bugDesc)
 
-	// Estruturas locais limpas para montar o JSON da requisição
 	type Message struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
@@ -214,8 +228,14 @@ func callAnthropic(groups []models.TraceGroup, bugDesc string, modelAi string) (
 	return "Nenhuma análise gerada", nil
 }
 
-func callLlamaViaGroq(groups []models.TraceGroup, bugDesc string, modelAi string) (string, error) {
-	apiKey := os.Getenv("GROQ_API_KEY")
+func callLlamaViaGroq(groups []models.TraceGroup, bugDesc string, modelAi string, keys models.APIKeys) (string, error) {
+	apiKey := keys.Groq
+	if apiKey == "" {
+		apiKey = os.Getenv("GROQ_API_KEY") // Fallback
+	}
+	if apiKey == "" {
+		return "", fmt.Errorf("API Key do Groq não informada")
+	}
 
 	config := openai.DefaultConfig(apiKey)
 	config.BaseURL = "https://api.groq.com/openai/v1"
@@ -241,12 +261,18 @@ func callLlamaViaGroq(groups []models.TraceGroup, bugDesc string, modelAi string
 	return resp.Choices[0].Message.Content, nil
 }
 
-func callCopilot(groups []models.TraceGroup, bugDesc string, modelAi string) (string, error) {
-	apiKey := os.Getenv("AZURE_OPENAI_API_KEY")
-	endpoint := os.Getenv("AZURE_OPENAI_ENDPOINT")
+func callCopilot(groups []models.TraceGroup, bugDesc string, modelAi string, keys models.APIKeys) (string, error) {
+	apiKey := keys.Azure
+	if apiKey == "" {
+		apiKey = os.Getenv("AZURE_OPENAI_API_KEY")
+	}
+	endpoint := keys.AzureEP
+	if endpoint == "" {
+		endpoint = os.Getenv("AZURE_OPENAI_ENDPOINT")
+	}
 
 	if apiKey == "" || endpoint == "" {
-		return "", fmt.Errorf("credenciais do Azure OpenAI (Copilot) não configuradas no .env")
+		return "", fmt.Errorf("credenciais do Azure OpenAI (Copilot) não informadas")
 	}
 
 	config := openai.DefaultAzureConfig(apiKey, endpoint)

@@ -71,6 +71,17 @@
 
           </select>
         </div>
+
+        <button class="btn-icon-header" onclick="openSettings()" title="Configurar API Keys">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+            style="width: 16px; height: 16px;">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+            </path>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          </svg>
+        </button>
+
         <div class="version-badge">v3.1</div>
       </div>
     </header>
@@ -146,6 +157,58 @@
           </div>
         </div>
 
+        <div class="divider"></div>
+
+        <div id="settingsModal" class="modal-overlay">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h2>Configuração de API Keys</h2>
+              <button class="btn-close" onclick="closeSettings()">
+                <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">As chaves ficam salvas apenas
+                no seu navegador (localStorage) e são enviadas com a requisição.</p>
+
+              <div class="form-group">
+                <label>Google Gemini API Key</label>
+                <input type="password" id="key_gemini" placeholder="AIzaSy...">
+              </div>
+              <div class="form-group">
+                <label>OpenAI API Key</label>
+                <input type="password" id="key_openai" placeholder="sk-...">
+              </div>
+              <div class="form-group">
+                <label>Anthropic API Key (Claude)</label>
+                <input type="password" id="key_anthropic" placeholder="sk-ant-...">
+              </div>
+              <div class="form-group">
+                <label>Groq API Key (Llama)</label>
+                <input type="password" id="key_groq" placeholder="gsk_...">
+              </div>
+
+              <div style="display:flex; gap:12px; margin-top: 8px;">
+                <div class="form-group" style="flex:1;">
+                  <label>Azure OpenAI Endpoint</label>
+                  <input type="text" id="key_azure_ep" placeholder="https://...">
+                </div>
+                <div class="form-group" style="flex:1;">
+                  <label>Azure API Key</label>
+                  <input type="password" id="key_azure" placeholder="Chave do recurso Azure">
+                </div>
+              </div>
+
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" style="width: auto;" onclick="closeSettings()">Cancelar</button>
+              <button class="btn btn-primary" style="width: auto;" onclick="saveSettings()">Salvar Chaves</button>
+            </div>
+          </div>
+        </div>
+
       </aside>
 
       <main class="content-panel" id="contentPanel">
@@ -201,6 +264,38 @@
 
     const sessionData = {};
     const STORAGE_KEY = 'trace_pro_history';
+
+    // --- GERENCIAMENTO DE API KEYS ---
+    const KEYS_STORAGE = 'trace_api_keys';
+
+    function openSettings() {
+      document.getElementById('settingsModal').classList.add('active');
+      const keys = JSON.parse(localStorage.getItem(KEYS_STORAGE) || '{}');
+      document.getElementById('key_gemini').value = keys.gemini || '';
+      document.getElementById('key_openai').value = keys.openai || '';
+      document.getElementById('key_anthropic').value = keys.anthropic || '';
+      document.getElementById('key_groq').value = keys.groq || '';
+      document.getElementById('key_azure_ep').value = keys.azure_ep || '';
+      document.getElementById('key_azure').value = keys.azure || '';
+    }
+
+    function closeSettings() {
+      document.getElementById('settingsModal').classList.remove('active');
+    }
+
+    function saveSettings() {
+      const keys = {
+        gemini: document.getElementById('key_gemini').value.trim(),
+        openai: document.getElementById('key_openai').value.trim(),
+        anthropic: document.getElementById('key_anthropic').value.trim(),
+        groq: document.getElementById('key_groq').value.trim(),
+        azure_ep: document.getElementById('key_azure_ep').value.trim(),
+        azure: document.getElementById('key_azure').value.trim()
+      };
+      localStorage.setItem(KEYS_STORAGE, JSON.stringify(keys));
+      closeSettings();
+      alert('API Keys salvas com sucesso no navegador!');
+    }
 
     let currentReports = [];
     let currentHasAI = false;
@@ -389,6 +484,14 @@
       formData.append('bugDescription', bugDesc);
       formData.append('modelAi', modelAi);
       for (const file of fileInput.files) formData.append('files', file);
+
+      const keys = JSON.parse(localStorage.getItem(KEYS_STORAGE) || '{}');
+      formData.append('key_gemini', keys.gemini || '');
+      formData.append('key_openai', keys.openai || '');
+      formData.append('key_anthropic', keys.anthropic || '');
+      formData.append('key_groq', keys.groq || '');
+      formData.append('key_azure_ep', keys.azure_ep || '');
+      formData.append('key_azure', keys.azure || '');
 
       startLoading(withAI);
 
