@@ -214,5 +214,9 @@ func main() {
 		c.JSON(http.StatusOK, finalResponse)
 	})
 
+	r.StaticFile("/", "./index.html")
+	r.StaticFile("/styles.css", "./styles.css")
+	r.StaticFile("/favicon.ico", "./favicon.ico")
+
 	r.Run(port)
 }

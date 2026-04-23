@@ -1,0 +1,9 @@
+services:
+  trace-api:
+    build: .
+    container_name: trace_intelligence_pro
+    ports:
+      - "8070:8070"
+    env_file:
+      - .env
+    restart: unless-stopped
