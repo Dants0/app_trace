@@ -127,6 +127,19 @@ O endpoint mais completo. Executa todo o pipeline de processamento e diagnóstic
   ]
   ```
 
+### 4. Health da API (`/health`)
+- **Método:** `GET`
+- **Retorno Exemplo:**
+  ```json
+  {
+    "status": "ok",
+    "timestamp": 1780318569,
+    "version": "3.1.0"
+  }
+  ```
+
+
+
 ## 🧠 Como funciona o Parser Interno
 
 O processador (`internal/parser/processor.go`) executa as seguintes etapas para garantir precisão e velocidade:

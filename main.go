@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -212,6 +213,10 @@ func main() {
 		}
 
 		c.JSON(http.StatusOK, finalResponse)
+	})
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "timestamp": time.Now().Unix(), "version": "3.1.0"})
 	})
 
 	r.StaticFile("/", "./index.html")
